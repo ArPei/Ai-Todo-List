@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "AI 互動代辦事項",
+  "version": "1.1",
+  "description": "透過 Gemini 自動解析並建立代辦清單",
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ]
+}

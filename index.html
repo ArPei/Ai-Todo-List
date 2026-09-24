@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="透過 Gemini 自動解析並建立代辦清單">
+  <meta name="theme-color" content="#1a73e8">
+  <title>AI 代辦事項助理</title>
+  <link rel="icon" href="icon-48.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="site.webmanifest">
+  <style>
+    :root { color-scheme: light; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+      color: #333;
+      background: #fff;
+      font-size: 16px;
+    }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .topbar h1 { margin: 0; font-size: 18px; }
+    .card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    .settings-toggle {
+      cursor: pointer; color: #1a73e8; font-size: 14px; font-weight: bold;
+      background: none; border: none; width: auto; margin: 0; padding: 8px; border-radius: 6px;
+    }
+    .settings-toggle:hover { background: #f1f3f4; }
+    .hidden { display: none; }
+    label { font-size: 13px; font-weight: bold; display: block; margin-top: 8px; }
+    .hint { font-size: 12px; font-weight: normal; color: #666; margin: 4px 0 0; line-height: 1.5; }
+    .hint a { color: #1a73e8; }
+    input, select, textarea, button {
+      width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px;
+      border-radius: 6px; border: 1px solid #ccc; font-size: 16px;
+      font-family: inherit;
+    }
+    textarea { resize: vertical; }
+    button { background-color: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; min-height: 44px; }
+    button:hover { background-color: #1557b0; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    .task-item { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .task-body { font-size: 15px; margin-bottom: 6px; line-height: 1.5; word-break: break-word; }
+    .task-meta { color: #666; font-size: 13px; display: block; margin-top: 4px; }
+    .task-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 10px; }
+    .btn-sm { width: auto; padding: 8px 12px; font-size: 13px; margin-top: 0; min-height: 36px; }
+    .btn-done { background-color: #34a853; }
+    .btn-edit { background-color: #fbbc05; color: #202124; }
+    .btn-move { background-color: #f1f3f4; color: #333; border: 1px solid #ccc; }
+    .btn-move:disabled { opacity: 0.4; cursor: not-allowed; }
+    .edit-form label { margin-top: 6px; }
+    .empty { color: #888; font-size: 14px; text-align: center; padding: 20px 8px; line-height: 1.6; }
+    .status { font-size: 13px; margin-top: 8px; text-align: center; min-height: 18px; }
+    .status.error { color: #d93025; text-align: left; line-height: 1.5; }
+    .status.info { color: #666; }
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; }
+      body { background: #1f1f1f; color: #e8eaed; }
+      .card { background: #2a2a2a; border-color: #3c3c3c; }
+      .task-item { background: #2a2a2a; border-color: #3c3c3c; }
+      input, select, textarea { background: #1f1f1f; color: #e8eaed; border-color: #5f6368; }
+      .btn-move { background: #3c4043; color: #e8eaed; border-color: #5f6368; }
+      .settings-toggle:hover { background: #3c4043; }
+      .hint, .task-meta, .empty, .status.info { color: #9aa0a6; }
+      .status.error { color: #f28b82; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>AI 代辦事項助理</h1>
+    <button type="button" class="settings-toggle" id="toggleSettings" aria-expanded="false" aria-controls="settingsPanel">⚙️ 設定</button>
+  </div>
+
+  <!-- 設定區塊 -->
+  <div id="settingsPanel" class="card hidden">
+    <label for="apiKeyInput">Gemini API Key：</label>
+    <input type="password" id="apiKeyInput" placeholder="輸入你的 API Key" autocomplete="off" spellcheck="false">
+    <p class="hint">
+      可到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> 免費申請。
+      Key 只會存在這台裝置的瀏覽器裡，不會傳給其他人。
+    </p>
+
+    <label for="modelSelect">模型選擇：</label>
+    <select id="modelSelect">
+      <option value="gemini-flash-latest">gemini-flash-latest (預設/推薦)</option>
+      <option value="gemini-3.6-pro">gemini-3.6-pro</option>
+      <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+    </select>
+
+    <button type="button" id="saveSettingsBtn">儲存設定</button>
+    <div id="settingsStatus" class="status" role="status"></div>
+  </div>
+
+  <!-- 新增任務輸入區塊 -->
+  <div class="card">
+    <label for="taskInput" class="hidden">任務內容</label>
+    <textarea id="taskInput" placeholder="輸入任務語意，例如：明天早上10點跟客戶會議，優先度高..." rows="3"></textarea>
+    <button type="button" id="submitBtn">智能解析並新增</button>
+    <div id="statusMsg" class="status" role="status"></div>
+  </div>
+
+  <!-- 代辦清單 -->
+  <h2 style="margin: 16px 0 8px; font-size: 16px;">代辦清單</h2>
+  <ul id="taskList"></ul>
+  <p id="emptyState" class="empty hidden">目前沒有代辦事項。<br>在上面輸入一句話，AI 會自動幫你整理成任務。</p>
+
+  <script src="script.js"></script>
+</body>
+</html>
