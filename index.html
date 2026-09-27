@@ -3,15 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="透過 Gemini 自動解析並建立代辦清單">
-  <meta name="theme-color" content="#1a73e8">
+  <meta name="description" content="透過 AI(Gemini / Claude)自動解析並建立代辦清單,支援分類與步驟拆解">
+  <meta name="theme-color" content="#4f46e5">
   <title>AI 代辦事項助理</title>
   <link rel="icon" href="icon-48.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="site.webmanifest">
   <style>
-    :root { color-scheme: light; }
-    * { -webkit-tap-highlight-color: transparent; }
+    :root {
+      color-scheme: light;
+      --accent: #4f46e5;
+      --accent-dark: #4338ca;
+      --danger: #dc2626;
+      --warn: #d97706;
+      --good: #059669;
+    }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
     body {
       width: 100%;
       max-width: 480px;
@@ -19,56 +26,108 @@
       padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
       box-sizing: border-box;
       font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
-      color: #333;
+      color: #2b2b2b;
       background: #fff;
       font-size: 16px;
     }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
     .topbar h1 { margin: 0; font-size: 18px; }
-    .card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    .card { background: #f9f9f9; border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
     .settings-toggle {
-      cursor: pointer; color: #1a73e8; font-size: 14px; font-weight: bold;
+      cursor: pointer; color: var(--accent); font-size: 14px; font-weight: bold;
       background: none; border: none; width: auto; margin: 0; padding: 8px; border-radius: 6px;
     }
-    .settings-toggle:hover { background: #f1f3f4; }
+    .settings-toggle:hover { background: #f1f1fb; }
     .hidden { display: none; }
     label { font-size: 13px; font-weight: bold; display: block; margin-top: 8px; }
     .hint { font-size: 12px; font-weight: normal; color: #666; margin: 4px 0 0; line-height: 1.5; }
-    .hint a { color: #1a73e8; }
+    .hint a { color: var(--accent); }
+    .divider { border: none; border-top: 1px solid #e5e5e5; margin: 14px 0; }
     input, select, textarea, button {
       width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px;
-      border-radius: 6px; border: 1px solid #ccc; font-size: 16px;
-      font-family: inherit;
+      border-radius: 8px; border: 1px solid #ccc; font-size: 16px;
+      font-family: inherit; background: #fff; color: inherit;
     }
     textarea { resize: vertical; }
-    button { background-color: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; min-height: 44px; }
-    button:hover { background-color: #1557b0; }
+    button { background-color: var(--accent); color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; min-height: 44px; }
+    button:hover { background-color: var(--accent-dark); }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     ul { list-style: none; padding: 0; margin: 0; }
-    .task-item { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    .task-body { font-size: 15px; margin-bottom: 6px; line-height: 1.5; word-break: break-word; }
-    .task-meta { color: #666; font-size: 13px; display: block; margin-top: 4px; }
+
+    .filter-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; margin-bottom: 4px; -webkit-overflow-scrolling: touch; }
+    .filter-chip {
+      flex: 0 0 auto; width: auto; margin-top: 0; padding: 6px 12px; border-radius: 999px;
+      border: 1px solid #ddd; background: #fff; font-size: 13px; font-weight: normal; color: #333; cursor: pointer;
+    }
+    .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: bold; }
+
+    .task-item { background: #fff; border: 1px solid #eee; border-left: 4px solid #ccc; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .task-item.priority-high { border-left-color: var(--danger); }
+    .task-item.priority-mid { border-left-color: var(--warn); }
+    .task-item.priority-low { border-left-color: var(--good); }
+
+    .task-toprow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #eee; color: #444; }
+    .badge.work { background: #e0e7ff; color: #3730a3; }
+    .badge.fun { background: #fce7f3; color: #9d174d; }
+    .badge.drama { background: #ede9fe; color: #5b21b6; }
+    .badge.movie { background: #dbeafe; color: #1e40af; }
+    .badge.food { background: #ffedd5; color: #9a3412; }
+    .badge.other { background: #f1f5f9; color: #475569; }
+
+    .prio-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .prio-tag.prio-high { background: #fee2e2; color: #991b1b; }
+    .prio-tag.prio-mid { background: #fef3c7; color: #92400e; }
+    .prio-tag.prio-low { background: #d1fae5; color: #065f46; }
+
+    .task-text { font-size: 15px; margin-bottom: 4px; line-height: 1.5; word-break: break-word; }
+    .task-meta { color: #666; font-size: 13px; display: block; }
     .task-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 10px; }
     .btn-sm { width: auto; padding: 8px 12px; font-size: 13px; margin-top: 0; min-height: 36px; }
-    .btn-done { background-color: #34a853; }
+    .btn-done { background-color: var(--good); }
     .btn-edit { background-color: #fbbc05; color: #202124; }
     .btn-move { background-color: #f1f3f4; color: #333; border: 1px solid #ccc; }
     .btn-move:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ai { background-color: var(--accent); }
+
+    .steps-panel { margin-top: 10px; padding: 8px 10px; background: #f5f5ff; border-radius: 8px; border: 1px dashed #c7d2fe; }
+    .steps-title { font-size: 12px; font-weight: bold; color: #4338ca; margin-bottom: 4px; }
+    .step-row { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; padding: 4px 0; cursor: pointer; }
+    .step-row input { width: auto; margin-top: 3px; }
+    .step-row.done span { text-decoration: line-through; color: #999; }
+
     .edit-form label { margin-top: 6px; }
+    .backup-row { display: flex; gap: 8px; }
+    .backup-row button { flex: 1; }
+
     .empty { color: #888; font-size: 14px; text-align: center; padding: 20px 8px; line-height: 1.6; }
     .status { font-size: 13px; margin-top: 8px; text-align: center; min-height: 18px; }
-    .status.error { color: #d93025; text-align: left; line-height: 1.5; }
+    .status.error { color: var(--danger); text-align: left; line-height: 1.5; }
     .status.info { color: #666; }
+
     @media (prefers-color-scheme: dark) {
-      :root { color-scheme: dark; }
+      :root { color-scheme: dark; --accent: #818cf8; --accent-dark: #6366f1; }
       body { background: #1f1f1f; color: #e8eaed; }
       .card { background: #2a2a2a; border-color: #3c3c3c; }
+      .divider { border-top-color: #3c3c3c; }
       .task-item { background: #2a2a2a; border-color: #3c3c3c; }
       input, select, textarea { background: #1f1f1f; color: #e8eaed; border-color: #5f6368; }
       .btn-move { background: #3c4043; color: #e8eaed; border-color: #5f6368; }
       .settings-toggle:hover { background: #3c4043; }
       .hint, .task-meta, .empty, .status.info { color: #9aa0a6; }
-      .status.error { color: #f28b82; }
+      .filter-chip { background: #2a2a2a; border-color: #3c3c3c; color: #e8eaed; }
+      .filter-chip.active { background: var(--accent); border-color: var(--accent); color: #1f1f1f; }
+      .badge.work { background: #312e81; color: #c7d2fe; }
+      .badge.fun { background: #831843; color: #fbcfe8; }
+      .badge.drama { background: #4c1d95; color: #ddd6fe; }
+      .badge.movie { background: #1e3a8a; color: #bfdbfe; }
+      .badge.food { background: #7c2d12; color: #fed7aa; }
+      .badge.other { background: #1e293b; color: #cbd5e1; }
+      .prio-tag.prio-high { background: #450a0a; color: #fca5a5; }
+      .prio-tag.prio-mid { background: #451a03; color: #fcd34d; }
+      .prio-tag.prio-low { background: #022c22; color: #6ee7b7; }
+      .steps-panel { background: #232042; border-color: #4338ca; }
+      .steps-title { color: #c7d2fe; }
     }
   </style>
 </head>
@@ -80,36 +139,51 @@
 
   <!-- 設定區塊 -->
   <div id="settingsPanel" class="card hidden">
-    <label for="apiKeyInput">Gemini API Key：</label>
-    <input type="password" id="apiKeyInput" placeholder="輸入你的 API Key" autocomplete="off" spellcheck="false">
+    <label for="providerSelect">AI 服務:</label>
+    <select id="providerSelect">
+      <option value="gemini">Google Gemini</option>
+      <option value="anthropic">Anthropic Claude</option>
+    </select>
+
+    <label for="apiKeyInput">API Key:</label>
+    <input type="password" id="apiKeyInput" placeholder="貼上對應服務的 API Key" autocomplete="off" spellcheck="false">
+    <p class="hint" id="providerHint"></p>
     <p class="hint">
-      可到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> 免費申請。
-      Key 只會存在這台裝置的瀏覽器裡，不會傳給其他人。
+      可到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>(Gemini,提供免費額度)
+      或 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">Anthropic Console</a>(Claude,依用量計費)申請金鑰。
+      請先選好上面的服務,再貼上對應的 Key。
+      Key 只會存在這台裝置(或你登入的 Chrome 同步帳號)裡,不會傳給我們或任何第三方伺服器。
     </p>
-
-    <label for="modelSelect">模型選擇：</label>
-    <select id="modelSelect">
-      <option value="gemini-3.6-flash">gemini-3.6-flash(預設/推薦)</option>
-      <option value="gemini-3.6-pro">gemini-3.6-pro</option>
-      <option value="gemini-flash-latest">gemini-flash-latest</option>      
-          </select>
-
     <button type="button" id="saveSettingsBtn">儲存設定</button>
     <div id="settingsStatus" class="status" role="status"></div>
+
+    <hr class="divider">
+    <label>本機備份</label>
+    <p class="hint">
+      Chrome 擴充功能版本會透過瀏覽器同步自動在你登入的裝置間同步;若是網頁版,不同裝置不會自動同步,
+      可用下面的備份檔案手動搬移資料。
+    </p>
+    <div class="backup-row">
+      <button type="button" id="exportBackupBtn" class="btn-sm btn-move">⬇️ 匯出備份</button>
+      <button type="button" id="importBackupBtnLabel" class="btn-sm btn-move">⬆️ 匯入備份</button>
+    </div>
+    <input type="file" id="importBackupInput" accept="application/json" class="hidden">
+    <div id="backupStatus" class="status" role="status"></div>
   </div>
 
   <!-- 新增任務輸入區塊 -->
   <div class="card">
     <label for="taskInput" class="hidden">任務內容</label>
-    <textarea id="taskInput" placeholder="輸入任務語意，例如：明天早上10點跟客戶會議，優先度高..." rows="3"></textarea>
+    <textarea id="taskInput" placeholder="輸入任務語意,例如:明天早上10點跟客戶會議,優先度高..." rows="3"></textarea>
     <button type="button" id="submitBtn">智能解析並新增</button>
     <div id="statusMsg" class="status" role="status"></div>
   </div>
 
   <!-- 代辦清單 -->
   <h2 style="margin: 16px 0 8px; font-size: 16px;">代辦清單</h2>
+  <div class="filter-row" id="categoryFilters" role="tablist" aria-label="依分類篩選"></div>
   <ul id="taskList"></ul>
-  <p id="emptyState" class="empty hidden">目前沒有代辦事項。<br>在上面輸入一句話，AI 會自動幫你整理成任務。</p>
+  <p id="emptyState" class="empty hidden"></p>
 
   <script src="script.js"></script>
 </body>
